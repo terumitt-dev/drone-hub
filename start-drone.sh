@@ -1,19 +1,23 @@
 #!/bin/bash
 set -e
 
-# リポジトリディレクトリに移動
 cd ~/drone-hub
 
-# 最新の設定を取得
+echo "🚀 Drone OSS 更新開始: $(date)"
+
+# 最新設定取得
 git pull origin main
 
-# Dockerイメージを最新化
+# 最新イメージ取得
 docker-compose pull
 
-# コンテナ起動
+# 再起動
 docker-compose up -d
 
-# 状況確認
+# 不要イメージ削除
+docker image prune -f
+
+# 稼働確認
 docker ps
 
-echo "Drone OSS 起動・更新完了 🚀"
+echo "✅ Drone OSS 更新・再起動完了: $(date)"
