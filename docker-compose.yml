@@ -13,16 +13,30 @@ services:
       - /etc/ssl/drone/drone.key:/etc/ssl/private/drone.key:ro
     restart: always
     environment:
+      # --- 基本設定 ---
       - DRONE_SERVER_HOST=${DRONE_SERVER_HOST}
       - DRONE_SERVER_PROTO=${DRONE_SERVER_PROTO}
-      - DRONE_SERVER_PORT=:${DRONE_SERVER_PORT}
-      - DRONE_RPC_SECRET=${DRONE_RPC_SECRET}
+      # PORTの記述は ":" を外す（":"が入るとDroneがport番号認識しないことがある）
+      - DRONE_SERVER_PORT=${DRONE_SERVER_PORT}
+
+      # --- GitHub OAuth ---
       - DRONE_GITHUB_CLIENT_ID=${DRONE_GITHUB_CLIENT_ID}
       - DRONE_GITHUB_CLIENT_SECRET=${DRONE_GITHUB_CLIENT_SECRET}
+
+      # --- 認証関連 ---
+      - DRONE_RPC_SECRET=${DRONE_RPC_SECRET}
       - DRONE_USER_CREATE=username:${DRONE_ADMIN},admin:true
+      - DRONE_USER_FILTER=${DRONE_ADMIN}
+      - DRONE_OPEN=false
+
+      # --- TLS設定 ---
       - DRONE_TLS_CERT=/etc/ssl/certs/drone.crt
       - DRONE_TLS_KEY=/etc/ssl/private/drone.key
       - DRONE_TLS_AUTOCERT=${DRONE_TLS_AUTOCERT}
+
+      # --- ログ設定 ---
+      - DRONE_LOGS_DEBUG=false
+      - DRONE_LOGS_TRACE=false
 
   drone-runner:
     image: drone/drone-runner-docker:1
