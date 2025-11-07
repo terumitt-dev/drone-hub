@@ -1,36 +1,43 @@
 #!/bin/bash
 set -e
 
-# UTF-8 環境を前提
-export LANG=en_US.UTF-8
+DRONE_DIR="$HOME/drone-hub"
+LOGFILE="$HOME/drone-update.log"
 
-# ====== 前提チェック ======
-for cmd in git docker-compose docker; do
-  if ! command -v $cmd &>/dev/null; then
-    echo "[ERROR] $cmd が見つかりません。"
+# ====== ログ ======
+exec >> "$LOGFILE" 2>&1
+echo "[INFO] ===== Drone 更新開始: $(date) ====="
+
+# ====== 前提コマンド ======
+for cmd in git docker; do
+  if ! command -v $cmd >/dev/null 2>&1; then
+    echo "[ERROR] $cmd が見つかりません"
     exit 1
   fi
 done
 
-if [ ! -d ~/drone-hub ]; then
-  echo "[ERROR] ~/drone-hub ディレクトリが存在しません。"
+# docker compose / docker-compose
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE="docker compose"
+else
+  COMPOSE="docker-compose"
+fi
+echo "[INFO] 使用 compose: $COMPOSE"
+
+# ====== リポジトリ移動 ======
+if [ ! -d "$DRONE_DIR" ]; then
+  echo "[ERROR] $DRONE_DIR が存在しません"
   exit 1
 fi
+cd "$DRONE_DIR"
 
-# ====== 実行 ======
-cd ~/drone-hub
+# ====== 更新 ======
+git pull
+REVISION=$(git rev-parse --short HEAD)
+echo "[INFO] 最新コミット: $REVISION"
 
-echo "[INFO] Drone OSS 更新開始: $(date)"
+$COMPOSE pull
+$COMPOSE up -d
 
-git pull origin main
-docker-compose pull
-docker-compose up -d
-
-# 安全なクリーンアップ
-read -p "[INFO] 不要イメージを削除しますか？ (y/N): " confirm
-if [ "$confirm" = "y" ]; then
-  docker image prune -f
-fi
-
-docker ps
-echo "[INFO] Drone OSS 更新・再起動完了: $(date)"
+# ====== 終了 ======
+echo "[INFO] ===== Drone 更新完了: $(date) ====="
