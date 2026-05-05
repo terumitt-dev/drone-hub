@@ -3,12 +3,16 @@
 Drone CI/CD サーバー + Runner の管理リポジトリ。
 Docker Compose で Drone OSS を運用しています。
 
+外部からのアクセスは Cloudflare Tunnel (cloudflared) 経由で受けており、
+EC2 のインバウンドポート (80/443) は閉じたまま運用しています。
+
 ## 構成
 
 | コンポーネント | イメージ | 役割 |
 |---|---|---|
 | drone-server | `drone/drone:2` | CI/CD サーバー（Web UI + API） |
 | drone-runner | `drone/drone-runner-docker:1` | ビルド実行（Docker Runner, capacity: 2） |
+| cloudflared | `cloudflare/cloudflared:latest` | Cloudflare Tunnel コネクタ（外部 HTTPS → 内部 HTTP に終端） |
 
 ## セットアップ
 
@@ -36,21 +40,25 @@ vi .env
 | 変数 | 説明 |
 |---|---|
 | `DRONE_SERVER_HOST` | Drone のホスト名（例: `drone.go-lilaregard.com`） |
-| `DRONE_SERVER_PROTO` | プロトコル（`https`） |
-| `DRONE_SERVER_PORT` | ポート番号 |
+| `DRONE_SERVER_PROTO` | プロトコル（`https`。Cloudflare 側で TLS 終端） |
 | `DRONE_GITHUB_CLIENT_ID` | GitHub OAuth Client ID |
 | `DRONE_GITHUB_CLIENT_SECRET` | GitHub OAuth Client Secret |
 | `DRONE_RPC_SECRET` | Server-Runner 間の共有シークレット |
 | `DRONE_ADMIN` | 管理者の GitHub ユーザー名 |
-| `DRONE_TLS_AUTOCERT` | TLS 自動取得（`true` / `false`） |
+| `CLOUDFLARE_TUNNEL_TOKEN` | Cloudflare Tunnel コネクタ用トークン |
 
-### 4. TLS 証明書を配置（手動 TLS の場合）
+### 4. Cloudflare Tunnel の設定
 
-```bash
-sudo mkdir -p /etc/ssl/drone
-sudo cp drone.crt /etc/ssl/drone/drone.crt
-sudo cp drone.key /etc/ssl/drone/drone.key
-```
+Cloudflare ダッシュボードで Tunnel を作成し、Public Hostname を設定する。
+
+1. Zero Trust → Networks → Tunnels → **Create a tunnel** → Cloudflared を選択
+2. Tunnel 名（例: `drone-prod`）を入力 → Save
+3. 表示される `--token eyJh...` を控えて `.env` の `CLOUDFLARE_TUNNEL_TOKEN` に設定
+4. **Public Hostnames** タブで以下を追加:
+   - Subdomain: `drone`
+   - Domain: `go-lilaregard.com`
+   - Service: `HTTP` / `drone-server:80`
+5. Cloudflare DNS に CNAME (`drone` → `<tunnel-id>.cfargotunnel.com`) が自動作成されることを確認
 
 ### 5. 起動
 
@@ -112,7 +120,7 @@ docker system prune -a --volumes
 
 ```
 drone-hub/
-├── docker-compose.yml    # Drone Server + Runner 定義
+├── docker-compose.yml    # Drone Server + Runner + cloudflared 定義
 ├── .env.example          # 環境変数テンプレート
 ├── .env                  # 環境変数（gitignore）
 ├── start-drone.sh        # 起動・更新スクリプト
