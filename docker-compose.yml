@@ -4,20 +4,18 @@ services:
   drone-server:
     image: drone/drone:2
     container_name: drone-server
-    ports:
-      - "80:80"
-      - "443:443"
+    expose:
+      - "80"
     volumes:
       - ./data:/data
-      - /etc/ssl/drone/drone.crt:/etc/ssl/certs/drone.crt:ro
-      - /etc/ssl/drone/drone.key:/etc/ssl/private/drone.key:ro
     restart: always
     environment:
       # --- 基本設定 ---
+      # cloudflared が外部からの HTTPS を終端し、内部 HTTP で drone-server に接続する。
+      # DRONE_SERVER_HOST / PROTO は外部公開 URL に合わせる（GitHub OAuth callback と一致させるため）。
       - DRONE_SERVER_HOST=${DRONE_SERVER_HOST}
       - DRONE_SERVER_PROTO=${DRONE_SERVER_PROTO}
-      # PORTの記述は ":" を外す（":"が入るとDroneがport番号認識しないことがある）
-      - DRONE_SERVER_PORT=${DRONE_SERVER_PORT}
+      - DRONE_SERVER_PORT=:80
 
       # --- GitHub OAuth ---
       - DRONE_GITHUB_CLIENT_ID=${DRONE_GITHUB_CLIENT_ID}
@@ -28,11 +26,6 @@ services:
       - DRONE_USER_CREATE=username:${DRONE_ADMIN},admin:true
       - DRONE_USER_FILTER=${DRONE_ADMIN}
       - DRONE_OPEN=false
-
-      # --- TLS設定 ---
-      - DRONE_TLS_CERT=/etc/ssl/certs/drone.crt
-      - DRONE_TLS_KEY=/etc/ssl/private/drone.key
-      - DRONE_TLS_AUTOCERT=${DRONE_TLS_AUTOCERT}
 
       # --- ログ設定 ---
       - DRONE_LOGS_DEBUG=false
@@ -47,8 +40,17 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - DRONE_RPC_PROTO=${DRONE_SERVER_PROTO}
-      - DRONE_RPC_HOST=${DRONE_SERVER_HOST}
+      # Runner は Docker network 内で drone-server に直接接続する
+      - DRONE_RPC_PROTO=http
+      - DRONE_RPC_HOST=drone-server
       - DRONE_RPC_SECRET=${DRONE_RPC_SECRET}
       - DRONE_RUNNER_CAPACITY=2
       - DRONE_RUNNER_NAME=default-runner
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: drone-cloudflared
+    restart: always
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - drone-server
